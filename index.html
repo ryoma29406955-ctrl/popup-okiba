@@ -209,7 +209,7 @@ h2.sub { font-family: var(--f-display); font-size: 15px; margin: 10px 0 0; }
       <ol>
         <li>置き場リストで、取ってくる場所の置き場（例：<span class="chip wh" tabindex="-1"><b>倉2</b><i>右</i>×20</span>）をタップする。</li>
         <li><b>持ってくる数</b>を入れる。</li>
-        <li><b>行き先</b>を選ぶ：「店頭（売場）に出す」か、倉庫からなら「店○（店頭ストック）に入れる」。</li>
+        <li><b>行き先</b>を選ぶ：「店頭に出す」か「G倉庫（ルミネ倉庫）に入れる」。どの箱に入れたかは選ばなくてOK。</li>
         <li>必要ならメモを書く（例：お客様お待ち、試着用）。</li>
         <li><b>「依頼する」</b>を押す → 依頼シートに並び、全員の画面に出る。</li>
       </ol>
@@ -334,7 +334,7 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
     $("vbox").innerHTML = `<h2 class="sub">店頭ストック（${st.length}箱）</h2><div class="boxes">${st.map(card).join("")}</div><h2 class="sub">ルミネ倉庫（${wh.length}箱）</h2>${!wh.length && D.whPending ? '<p class="none">倉庫の置き場はまだ反映していません。</p>' : `<div class="boxes">${wh.map(card).join("")}</div>`}${b3.length ? `<h2 class="sub">B3倉庫</h2><div class="boxes">${b3.map(card).join("")}</div>` : ""}`;
   }
   const fmtTime = (ms) => { if (!ms) return ""; const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
-  const toLabel = (to) => to === "floor" ? "店頭（売場）" : to + "（店頭ストック）";
+  const toLabel = (to) => to === "floor" ? "店頭" : to === "G倉庫" ? "G倉庫（ルミネ倉庫）" : to + "（店頭ストック）";
   function reqCard(m, done) {
     const x = skuIndex.get(m.sku); if (!x) return "";
     const { it, s } = x;
@@ -422,8 +422,8 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
     $("p-from").textContent = `${box} ${side}から（いま ${Math.max(e ? e.qty : 0, 0)}点${e && e.pend ? `・依頼中 ${e.pend}点` : ""}）`;
     $("p-qty").value = 1; $("p-note").value = ""; $("p-msg").textContent = "";
     $("p-who").value = LS.get("okiba-name");
-    const opts = ['<option value="floor">店頭（売場）に出す</option>'];
-    if (kindOf(box) !== "st") D.stBoxes.forEach(b => opts.push(`<option value="${b}">${b}（店頭ストック）に入れる</option>`));
+    const opts = ['<option value="floor">店頭に出す</option>'];
+    if (kindOf(box) !== "wh") opts.push('<option value="G倉庫">G倉庫（ルミネ倉庫）に入れる</option>');
     $("p-to").innerHTML = opts.join("");
     $("p-req").disabled = $("p-done").disabled = !canWrite;
     if (!API) $("p-msg").textContent = "依頼の保存先がまだつながっていないので、依頼できません。";
