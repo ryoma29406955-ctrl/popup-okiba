@@ -153,6 +153,8 @@ h2.sub { font-family: var(--f-display); font-size: 15px; margin: 10px 0 0; }
 
 .sold { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #e3f0e6; color: #1f6b3a; font-style: normal; font-size: 11px; font-weight: 700; vertical-align: middle; } .sold.none { background: transparent; color: var(--mut, #888); font-weight: 400; } .soldsum { color: #1f6b3a; } .today { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 4px; background: #fff0d6; color: #9a5b00; font-style: normal; font-size: 11px; font-weight: 700; vertical-align: middle; } .todaysum { color: #9a5b00; }
 
+.dayg { margin: 6px 0; } .dayg > summary { cursor: pointer; font-weight: 700; padding: 8px 4px; border-bottom: 1px solid var(--line, #ddd); } .dayg[open] > summary { margin-bottom: 8px; } .req .tm { font-weight: 700; }
+
 .chip.b3 { background: #efe6f8; color: #6a3d9a; } .box.b3 .bh { background: #efe6f8; color: #6a3d9a; }
 
 .pinbox { display: flex; gap: 8px; align-items: center; font-size: 13px; } .pinbox input { font: inherit; font-size: 16px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); width: 10em; }
@@ -353,23 +355,32 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
   function reqCard(m, done) {
     const x = skuIndex.get(m.sku); if (!x) return "";
     const { it, s } = x;
-    const meta = done ? `完了 ${fmtTime(m.doneAt || m.at)}${m.doneBy ? "・" + esc(m.doneBy) : ""}` : `依頼 ${fmtTime(m.at)}${m.by ? "・" + esc(m.by) : ""}`;
+    const hm = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+    const mins = done && m.doneAt && m.at && m.doneAt > m.at ? Math.round((m.doneAt - m.at) / 60000) : 0;
+    const meta = done
+      ? (m.status === "canceled" ? `依頼 ${fmtTime(m.at)}・取り消し ${fmtTime(m.updatedAt)}` : `依頼 ${fmtTime(m.at)} → <b class="tm">完了 ${hm(m.doneAt || m.at)}</b>${mins ? `（${mins}分）` : ""}${m.doneBy ? "・" + esc(m.doneBy) : ""}`)
+      : `依頼 ${fmtTime(m.at)}${m.by ? "・" + esc(m.by) : ""}`;
     const acts = !canWrite ? "" : done
       ? `<div class="acts"><button type="button" class="btn ghost" data-act="undo" data-id="${esc(m.id)}">元に戻す</button></div>`
       : `<div class="acts"><button type="button" class="btn go" data-act="done" data-id="${esc(m.id)}">完了</button><button type="button" class="btn ghost" data-act="cancel" data-id="${esc(m.id)}">取り消し</button></div>`;
     return `<div class="req${done ? " done" : ""}"><div class="ph ph-${it.hin}"></div><div class="what">
       <span class="route">${esc(m.fromBox)} ${esc(m.fromSide)} → ${esc(toLabel(m.to))}<span class="q">×${m.qty}</span></span>
       <b>${it.no} ${esc(it.name)}</b><span class="meta">${esc(s.color)} ${esc(s.size)}・${esc(s.sku)}</span>
-      ${m.note ? `<span class="memo">${esc(m.note)}</span>` : ""}<span class="meta">${meta}</span></div>${acts}</div>`;
+      ${m.note ? `<span class="memo">${esc(m.note)}</span>` : ""}<span class="meta">${meta}</span></div>${m.status === "canceled" ? "" : acts}</div>`;
   }
   function renderReq() {
     const mine = moves.filter(m => m.ver === VER);
     const open = mine.filter(m => m.status === "open").sort((a, b) => a.at - b.at);
-    const done = mine.filter(m => m.status === "done").sort((a, b) => (b.doneAt || b.at) - (a.doneAt || a.at)).slice(0, 40);
+    const done = mine.filter(m => m.status === "done").sort((a, b) => (b.doneAt || b.at) - (a.doneAt || a.at));
+    const canceled = mine.filter(m => m.status === "canceled").sort((a, b) => (b.updatedAt || b.at) - (a.updatedAt || a.at));
+    const wd = ["日", "月", "火", "水", "木", "金", "土"];
+    const days = []; done.forEach(m => { const d = new Date(m.doneAt || m.at), k = `${d.getMonth() + 1}/${d.getDate()}（${wd[d.getDay()]}）`; let g = days.find(x => x.k === k); if (!g) days.push(g = { k, ms: [] }); g.ms.push(m); });
+    const doneHTML = days.map((g, i) => `<details class="dayg"${i === 0 ? " open" : ""}><summary>${g.k} 完了 ${g.ms.length}件・${g.ms.reduce((a, m) => a + m.qty, 0)}点</summary><div class="reqs">${g.ms.map(m => reqCard(m, true)).join("")}</div></details>`).join("");
     $("badge").textContent = open.length ? String(open.length) : "";
     const note = API ? "" : '<div class="empty">依頼の保存先がまだつながっていません（見るだけ）。</div>';
     $("vreq").innerHTML = `${note}<h2 class="sub">まだの依頼（${open.length}件）</h2><div class="reqs">${open.map(m => reqCard(m, false)).join("") || '<div class="empty">いまは依頼がありません。置き場をタップすると依頼できます。</div>'}</div>
-      <h2 class="sub">完了した依頼（直近${done.length}件）</h2><div class="reqs">${done.map(m => reqCard(m, true)).join("") || '<div class="empty">まだありません。</div>'}</div>`;
+      <h2 class="sub">完了した依頼（全${done.length}件・新しい順）</h2>${doneHTML || '<div class="empty">まだありません。</div>'}
+      ${canceled.length ? `<details class="dayg"><summary>取り消した依頼 ${canceled.length}件</summary><div class="reqs">${canceled.map(m => reqCard(m, true)).join("")}</div></details>` : ""}`;
   }
   function renderAll() { LOC = compute(); renderHin(); renderBox(); renderReq(); }
 
