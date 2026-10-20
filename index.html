@@ -241,7 +241,7 @@ h2.sub { font-family: var(--f-display); font-size: 15px; margin: 10px 0 0; }
         <li>レジで売れた分は、このリストでは減りません。箱から売場に出したとき（完了を押したとき）に箱の数が減る仕組みです。</li>
         <li>箱から出すときは必ず依頼か完了を押す。押さないと、リストの数と箱の中身がずれていきます。</li>
         <li>依頼や完了は、このページを開ける人なら誰でも押せます（ログイン不要）。依頼の画面で名前を入れておくと、誰が依頼・完了したかが残ります（次からは自動で入ります）。</li>
-        <li>画面は10秒ごとに自動で新しくなります。電波が悪くて保存できなかったときは、もう一度押してください。</li>
+        <li>画面は20秒ごとに自動で新しくなります。電波が悪くて保存できなかったときは、もう一度押してください。</li>
       </ul>
     </div>
   </section>
@@ -415,10 +415,16 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
   $("t-help").addEventListener("click", () => show("help"));
 
   // ---------- 保存先（スプレッドシートのWebアプリ） ----------
+  const CACHE_KEY = "okiba-moves-" + VER;
   async function apiGet() {
-    const r = await fetch(API + "?ver=" + encodeURIComponent(VER) + "&t=" + Date.now(), { redirect: "follow" });
-    const j = await r.json(); if (!j.ok) throw new Error(j.error || "get");
-    return j.moves || [];
+    // 保存先（Apps Script）は混むと返事に数十秒かかることがあるので、25秒で打ち切って次の回にやり直す
+    const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 25000);
+    try {
+      const r = await fetch(API + "?ver=" + encodeURIComponent(VER) + "&t=" + Date.now(), { redirect: "follow", signal: ac.signal });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error || "get");
+      LS.set(CACHE_KEY, JSON.stringify({ at: Date.now(), moves: j.moves || [] }));
+      return j.moves || [];
+    } finally { clearTimeout(tm); }
   }
   async function apiPost(body) {
     const pin = LS.get("okiba-pin");
@@ -433,10 +439,13 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
     refreshing = true;
     try {
       moves = await apiGet(); online = true;
-      setSync(true, `共有中：最終更新 ${fmtTime(Date.now())}（10秒ごとに自動で更新）`);
+      setSync(true, `共有中：最終更新 ${fmtTime(Date.now())}（20秒ごとに自動で更新）`);
       renderAll();
     } catch (e) {
-      online = false; setSync(false, "保存先につながりません。電波を確認してください（数字は最後に読めたときのもの）");
+      online = false;
+      setSync(false, e && e.name === "AbortError"
+        ? "保存先の返事が遅れています。少しすると自動でもう一度読みます（数字は最後に読めたときのもの）"
+        : "保存先につながりません。電波を確認してください（数字は最後に読めたときのもの）");
     } finally { refreshing = false; }
   }
 
@@ -524,9 +533,14 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
     show(["hin", "box", "req", "help"].includes(start) ? start : "hin");
   }
   if (!API) { setSync(false, "見るだけ（依頼の保存先がまだつながっていません）"); return; }
-  setSync(false, "保存先に接続しています…");
+  // 前回読めた記録をすぐ表示（保存先の返事を待つ間も、依頼と数が空にならないように）
+  try {
+    const c = JSON.parse(LS.get(CACHE_KEY) || "null");
+    if (c && Array.isArray(c.moves)) { moves = c.moves; renderAll(); setSync(false, `前回（${fmtTime(c.at)}）の記録を表示中・保存先に接続しています…`); }
+    else setSync(false, "保存先に接続しています…");
+  } catch (e) { setSync(false, "保存先に接続しています…"); }
   refresh();
-  setInterval(() => { if (document.visibilityState === "visible" && !busy) refresh(); }, 10000);
+  setInterval(() => { if (document.visibilityState === "visible" && !busy) refresh(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 })();
 
