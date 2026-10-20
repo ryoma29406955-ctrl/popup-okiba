@@ -368,6 +368,8 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
       <b>${it.no} ${esc(it.name)}</b><span class="meta">${esc(s.color)} ${esc(s.size)}・${esc(s.sku)}</span>
       ${m.note ? `<span class="memo">${esc(m.note)}</span>` : ""}<span class="meta">${meta}</span></div>${m.status === "canceled" ? "" : acts}</div>`;
   }
+  const dayOpen = new Map();   // 見出し → 開いているか（押した日だけ覚える）
+  $("vreq").addEventListener("toggle", (ev) => { const d = ev.target; if (d.tagName === "DETAILS" && d.dataset.k) dayOpen.set(d.dataset.k, d.open); }, true);
   function renderReq() {
     const mine = moves.filter(m => m.ver === VER);
     const open = mine.filter(m => m.status === "open").sort((a, b) => a.at - b.at);
@@ -375,12 +377,13 @@ const D = {"ver": "real-20261016-st", "items": [{"no": 1, "hin": "58254103", "na
     const canceled = mine.filter(m => m.status === "canceled").sort((a, b) => (b.updatedAt || b.at) - (a.updatedAt || a.at));
     const wd = ["日", "月", "火", "水", "木", "金", "土"];
     const days = []; done.forEach(m => { const d = new Date(m.doneAt || m.at), k = `${d.getMonth() + 1}/${d.getDate()}（${wd[d.getDay()]}）`; let g = days.find(x => x.k === k); if (!g) days.push(g = { k, ms: [] }); g.ms.push(m); });
-    const doneHTML = days.map((g, i) => `<details class="dayg"${i === 0 ? " open" : ""}><summary>${g.k} 完了 ${g.ms.length}件・${g.ms.reduce((a, m) => a + m.qty, 0)}点</summary><div class="reqs">${g.ms.map(m => reqCard(m, true)).join("")}</div></details>`).join("");
+    const isOpen = (k, def) => dayOpen.has(k) ? dayOpen.get(k) : def;
+    const doneHTML = days.map((g, i) => `<details class="dayg" data-k="${esc(g.k)}"${isOpen(g.k, i === 0) ? " open" : ""}><summary>${g.k} 完了 ${g.ms.length}件・${g.ms.reduce((a, m) => a + m.qty, 0)}点</summary><div class="reqs">${g.ms.map(m => reqCard(m, true)).join("")}</div></details>`).join("");
     $("badge").textContent = open.length ? String(open.length) : "";
     const note = API ? "" : '<div class="empty">依頼の保存先がまだつながっていません（見るだけ）。</div>';
     $("vreq").innerHTML = `${note}<h2 class="sub">まだの依頼（${open.length}件）</h2><div class="reqs">${open.map(m => reqCard(m, false)).join("") || '<div class="empty">いまは依頼がありません。置き場をタップすると依頼できます。</div>'}</div>
       <h2 class="sub">完了した依頼（全${done.length}件・新しい順）</h2>${doneHTML || '<div class="empty">まだありません。</div>'}
-      ${canceled.length ? `<details class="dayg"><summary>取り消した依頼 ${canceled.length}件</summary><div class="reqs">${canceled.map(m => reqCard(m, true)).join("")}</div></details>` : ""}`;
+      ${canceled.length ? `<details class="dayg" data-k="取り消し"${isOpen("取り消し", false) ? " open" : ""}><summary>取り消した依頼 ${canceled.length}件</summary><div class="reqs">${canceled.map(m => reqCard(m, true)).join("")}</div></details>` : ""}`;
   }
   function renderAll() { LOC = compute(); renderHin(); renderBox(); renderReq(); }
 
